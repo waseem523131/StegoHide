@@ -1,0 +1,230 @@
+# StegoHide
+
+**Steganography Embedder for Lab Training**
+
+StegoHide is an educational command-line tool for demonstrating Least Significant Bit (LSB) steganography with PNG and BMP images. The project is intentionally CLI-focused so the presentation can concentrate on the core steganography functions rather than GUI styling.
+
+## Main Functions
+
+- Hide a UTF-8 text message inside  image.
+- Extract a hidden message from a StegoHide image.
+- Calculate image capacity before embedding.
+- Use a fixed binary header for reliable extraction.
+- Generate a plain TXT report for every hide/extract attempt.
+- Manage generated reports from the CLI.
+- Validate unsupported or corrupted image data.
+- Run without third-party Python packages.
+
+## Requirements
+
+- Python 3
+- Python Standard Library only
+- No `pip install` is required.
+- Tests use the built-in `unittest` module.
+
+## Supported Image Subsets
+
+### PNG
+
+The parser intentionally supports a small, educational subset:
+
+- PNG signature is required.
+- 8-bit samples only.
+- RGB (color type 2) or RGBA (color type 6).
+- Non-interlaced images only.
+- Standard PNG compression method.
+- Standard PNG filter method (filter types 0-4: None, Sub, Up, Average, Paeth).
+- Palette, grayscale, interlaced, and other unsupported variants are rejected.
+
+The writer creates a simple non-interlaced PNG using filter type 0 and zlib compression. The reader accepts all standard PNG row filters (0-4).
+
+### BMP
+
+The parser and writer support:
+
+- `BM` signature.
+- BITMAPINFOHEADER (40-byte DIB header).
+- 24-bit RGB/BGR pixels.
+- Uncompressed BMP only.
+- No indexed/paletted BMP.
+
+## LSB Design
+
+Each RGB pixel provides three LSB positions:
+
+1. Red
+2. Green
+3. Blue
+
+Pixels are processed in row-major order. Within each pixel, channels are processed as **Red → Green → Blue**.
+
+Only the least significant bit of a channel is changed:
+
+`new_value = (old_value & 0xFE) | message_bit`
+
+## Header Format
+
+The hidden data begins with a fixed header:
+
+```text
+STEGOHIDE + 4-byte unsigned big-endian message length + message bytes
+```
+
+`STEGOHIDE` is 9 bytes and the length field is 4 bytes, so the header before the message is **13 bytes**.
+
+The message length is stored in bytes, not characters. Text is encoded using UTF-8.
+
+## Capacity
+
+For an RGB image:
+
+```text
+pixels = width × height
+capacity_bits = pixels × 3
+capacity_bytes = capacity_bits // 8
+```
+
+Required bits are:
+
+```text
+required_bits = (13 × 8) + (message_length × 8)
+```
+
+Embedding is cancelled when required bits exceed available bits.
+
+## CLI Usage
+
+### Help
+
+```bash
+python main.py --help
+```
+
+### Version
+
+```bash
+python main.py --version
+```
+
+### Hide a message
+
+```bash
+python main.py hide --input input.png --output stego.png --message "Hello StegoHide"
+```
+
+### Extract a message
+
+```bash
+python main.py extract --input stego.png
+```
+
+### Report management
+
+List reports:
+
+```bash
+python main.py reports list
+```
+
+Open a report:
+
+```bash
+python main.py reports open REPORT_NAME.txt
+```
+
+Delete a report:
+
+```bash
+python main.py reports delete REPORT_NAME.txt
+```
+
+### Configuration and logging
+
+```bash
+python main.py --config config/stegohide_config.json --log-level DEBUG hide --input input.png --output stego.png --message "Hello"
+```
+
+## Project Structure
+
+```text
+## Project Structure
+
+```text
+StegoHide/
+
+├── main.py
+├── README.md
+│
+├── core/
+│   ├── __init__.py
+│   ├── bits.py
+│   ├── capacity.py
+│   ├── embed.py
+│   ├── extract.py
+│   ├── header.py
+│   └── image.py
+│
+├── cli/
+│   ├── __init__.py
+│   ├── commands.py
+│   └── menu.py
+│
+├── config/
+│   └── config.py
+│
+├── reports/
+│   ├── __init__.py
+│   └── report_manager.py
+│
+├── utils/
+│   ├── __init__.py
+│   ├── errors.py
+│   ├── logger.py
+│   └── validation.py
+│
+├── tests/
+│   ├── test_bits.py
+│   ├── test_capacity.py
+│   ├── test_embed.py
+│   ├── test_extract.py
+│   ├── test_header.py
+│   ├── test_cli.py
+│   └── test_reports.py
+│
+├── input/
+└── output/
+```
+
+## Error Handling
+
+The CLI reports clear errors for cases such as:
+
+- file not found
+- unsupported image format
+- invalid image signature
+- corrupted PNG/BMP data
+- unsupported image features
+- insufficient capacity
+- invalid StegoHide header
+- invalid embedded message length
+- invalid UTF-8 payload
+
+Failed hide/extract operations also create a TXT report containing the error reason.
+
+## Testing
+
+Run all tests with:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+## Limitations
+
+This is an educational LSB implementation. PNG support is limited to 8-bit RGB/RGBA, non-interlaced images; standard row filters 0-4 are supported. BMP support is limited to 24-bit uncompressed BITMAPINFOHEADER images. The project does not provide encryption, compression, or resistance against steganalysis.
+
+## Developer
+
+Waseem Ayash
+
+Generated by StegoHide

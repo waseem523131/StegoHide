@@ -1,0 +1,6 @@
+{
+  "log_level": "DEBUG",
+  "reports_dir": "reports",
+  "output_dir": "output",
+  "version": "1.0.0"
+}
