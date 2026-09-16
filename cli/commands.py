@@ -15,7 +15,19 @@ from reports.report_manager import (
     open_report,
 )
 from utils.logger import configure_logger
-
+from forensics.image_forensics import (
+    fast_forensics, 
+    format_forensics_report,
+)
+from reports.report_manager import create_forensic_case
+from core.document import (
+    hide_message_in_docx,
+    extract_message_from_docx,
+)
+from core.video import (
+    hide_message_in_video,
+    extract_message_from_video,
+)
 
 VERSION = "1.0.0"
 
@@ -156,6 +168,7 @@ def build_parser():
         ),
     )
 
+
     # ---------------------------------------------------------
     # REPORTS
     # ---------------------------------------------------------
@@ -193,6 +206,102 @@ def build_parser():
         "name",
         help="Report file name.",
     )
+    
+    forensics_parser = subparsers.add_parser(
+         "forensics",
+        help="Run fast image forensic analysis.",
+)
+
+    forensics_parser.add_argument(
+        "image",
+        help="Path to the image file.",
+)
+    
+        # ---------------------------------------------------------
+    # DOCX HIDE
+    # ---------------------------------------------------------
+
+    docx_hide_parser = subparsers.add_parser(
+        "docx-hide",
+        help="Hide a text message inside a DOCX document.",
+    )
+
+    docx_hide_parser.add_argument(
+        "input",
+        help="Source DOCX document.",
+    )
+
+    docx_hide_parser.add_argument(
+        "output",
+        help="Output DOCX document.",
+    )
+
+    docx_hide_parser.add_argument(
+        "--message",
+        required=True,
+        help="UTF-8 text message to hide.",
+    )
+        # ---------------------------------------------------------
+    # DOCX EXTRACT
+    # ---------------------------------------------------------
+
+    docx_extract_parser = subparsers.add_parser(
+        "docx-extract",
+        help="Extract a hidden message from a DOCX document.",
+    )
+
+    docx_extract_parser.add_argument(
+        "input",
+        help="DOCX document containing hidden data.",
+    )
+
+    docx_extract_parser.add_argument(
+        "--output",
+        help="Optional UTF-8 text file for the extracted message.",
+    )
+    
+    # ---------------------------------------------------------
+    # VIDEO HIDE
+    # ---------------------------------------------------------
+
+    video_hide_parser = subparsers.add_parser(
+        "video-hide",
+        help="Hide a text message inside an STV video.",
+    )
+
+    video_hide_parser.add_argument(
+        "input",
+        help="Source STV video.",
+    )
+
+    video_hide_parser.add_argument(
+        "output",
+        help="Output STV video.",
+    )
+
+    video_hide_parser.add_argument(
+        "--message",
+        required=True,
+        help="UTF-8 text message to hide.",
+    )
+        # ---------------------------------------------------------
+    # VIDEO EXTRACT
+    # ---------------------------------------------------------
+
+    video_extract_parser = subparsers.add_parser(
+        "video-extract",
+        help="Extract a hidden message from an STV video.",
+    )
+
+    video_extract_parser.add_argument(
+        "input",
+        help="STV video containing hidden data.",
+    )
+
+    video_extract_parser.add_argument(
+        "--output",
+        help="Optional UTF-8 text file for the extracted message.",
+    )
 
     return parser
 
@@ -210,6 +319,27 @@ def _image_details(path):
         ),
     }
 
+
+def run_forensics(image_path):
+    """
+    Run fast image forensic analysis and create a case report.
+    """
+
+    try:
+        result = fast_forensics(image_path)
+
+        print(format_forensics_report(result))
+
+        report_path = create_forensic_case(
+            result,
+            scan_type="FAST",
+        )
+
+        print()
+        print(f"Case report saved: {report_path}")
+
+    except Exception as error:
+        print(f"Forensics error: {error}")
 
 def main(argv=None):
     parser = build_parser()
@@ -469,8 +599,280 @@ def main(argv=None):
 
             print(f"Error: {exc}")
             print(f"Report: {report_path}")
+            
+        
+            # =========================================================
+    # DOCX HIDE
+    # =========================================================
+
+    if args.command == "docx-hide":
+
+        details = {}
+
+        try:
+            result = hide_message_in_docx(
+                args.message,
+                args.input,
+                args.output,
+            )
+
+            details = {
+                "Document Type": "DOCX",
+                "Input Document": args.input,
+                "Output Document": result["output_path"],
+                "Message Length": result["message_length"],
+            }
+
+            report_path = create_report(
+                "DOCX-Hide",
+                "Success",
+                details,
+            )
+
+            print(
+                "Message hidden successfully: "
+                f"{result['output_path']}"
+            )
+
+            print(
+                f"Report: {report_path}"
+            )
+
+            return 0
+
+        except Exception as exc:
+
+            logger.error(
+                "DOCX hide failed: %s",
+                exc,
+            )
+
+            report_path = create_report(
+                "DOCX-Hide",
+                "Failed",
+                details,
+                str(exc),
+            )
+
+            print(f"Error: {exc}")
+            print(f"Report: {report_path}")
 
             return 1
+        
+        # =========================================================
+    # DOCX EXTRACT
+    # =========================================================
+
+    if args.command == "docx-extract":
+
+        details = {}
+
+        try:
+            result = extract_message_from_docx(
+                args.input
+            )
+
+            details = {
+                "Document Type": "DOCX",
+                "Input Document": args.input,
+                "Message Length": result["message_length"],
+                "Extracted Message": result["message"],
+            }
+
+            report_path = create_report(
+                "DOCX-Extract",
+                "Success",
+                details,
+            )
+
+            if args.output:
+
+                Path(args.output).write_text(
+                    result["message"],
+                    encoding="utf-8",
+                )
+
+                print(
+                    "Extracted message written to: "
+                    f"{args.output}"
+                )
+
+            else:
+
+                print(
+                    "Message extracted successfully:"
+                )
+
+                print()
+                print(result["message"])
+
+            print(
+                f"Report: {report_path}"
+            )
+
+            return 0
+
+        except Exception as exc:
+
+            logger.error(
+                "DOCX extract failed: %s",
+                exc,
+            )
+
+            report_path = create_report(
+                "DOCX-Extract",
+                "Failed",
+                details,
+                str(exc),
+            )
+
+            print(f"Error: {exc}")
+            print(f"Report: {report_path}")
+
+            return 1
+        # =========================================================
+    # VIDEO HIDE
+    # =========================================================
+
+    if args.command == "video-hide":
+
+        details = {}
+
+        try:
+
+            result = hide_message_in_video(
+                message=args.message,
+                input_path=args.input,
+                output_path=args.output,
+            )
+
+            details = {
+                "Video Type": "STV",
+                "Input Video": args.input,
+                "Output Video": args.output,
+                "Width": result["width"],
+                "Height": result["height"],
+                "Frame Count": result["frame_count"],
+                "Message Length": result["message_length"],
+                "Payload Length": result["payload_length"],
+                "Embedded Bits": result["embedded_bits"],
+            }
+
+            report_path = create_report(
+                "VIDEO-Hide",
+                "Success",
+                details,
+            )
+
+            print(
+                "Message hidden successfully: "
+                f"{result['output_path']}"
+            )
+
+            print(
+                f"Report: {report_path}"
+            )
+
+            return 0
+
+        except Exception as exc:
+
+            logger.error(
+                "Video hide failed: %s",
+                exc,
+            )
+
+            report_path = create_report(
+                "VIDEO-Hide",
+                "Failed",
+                details,
+                str(exc),
+            )
+
+            print(f"Error: {exc}")
+            print(f"Report: {report_path}")
+
+            return 1
+
+
+    # =========================================================
+    # VIDEO EXTRACT
+    # =========================================================
+
+    if args.command == "video-extract":
+
+        details = {}
+
+        try:
+
+            result = extract_message_from_video(
+                args.input
+            )
+
+            details = {
+                "Video Type": "STV",
+                "Input Video": args.input,
+                "Message Length": result["message_length"],
+                "Extracted Message": result["message"],
+            }
+
+            report_path = create_report(
+                "VIDEO-Extract",
+                "Success",
+                details,
+            )
+
+            if args.output:
+
+                Path(args.output).write_text(
+                    result["message"],
+                    encoding="utf-8",
+                )
+
+                print(
+                    "Extracted message written to: "
+                    f"{args.output}"
+                )
+
+            else:
+
+                print(
+                    "Message extracted successfully:"
+                )
+
+                print()
+                print(result["message"])
+
+            print(
+                f"Report: {report_path}"
+            )
+
+            return 0
+
+        except Exception as exc:
+
+            logger.error(
+                "Video extract failed: %s",
+                exc,
+            )
+
+            report_path = create_report(
+                "VIDEO-Extract",
+                "Failed",
+                details,
+                str(exc),
+            )
+
+            print(
+                f"Error: {exc}"
+            )
+
+            print(
+                f"Report: {report_path}"
+            )
+
+            return 1
+
 
     # =========================================================
     # REPORTS
@@ -530,8 +932,11 @@ def main(argv=None):
             "Usage: python main.py "
             "reports {list,open,delete}"
         )
-
+        
+    if args.command == "forensics":
+        run_forensics(args.image)
         return 0
+
 
     # =========================================================
     # HELP

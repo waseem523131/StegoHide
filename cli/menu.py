@@ -3,6 +3,7 @@
 import os
 import sys
 from pathlib import Path
+import ctypes
 
 from cli.commands import main as cli_main
 from reports.report_manager import (
@@ -46,7 +47,7 @@ def enable_windows_colors():
         return
 
     try:
-        import ctypes
+        
 
         kernel32 = ctypes.windll.kernel32
 
@@ -248,6 +249,90 @@ def select_image(directory, title_text):
                 )
             )
 
+def select_file(directory, title, extensions):
+    
+    files = sorted(
+        [
+            path
+            for path in directory.iterdir()
+            if path.is_file()
+            and path.suffix.lower() in extensions
+        ]
+    )
+
+    if not files:
+
+        print(
+            color(
+                f"\nNo files found in {directory}.",
+                Colors.BRIGHT_YELLOW,
+            )
+        )
+
+        pause()
+        return None
+
+    print()
+
+    line()
+
+    print(
+        "|"
+        + color(
+            title.center(WIDTH),
+            Colors.BRIGHT_WHITE,
+        )
+        + "|"
+    )
+
+    line()
+
+    for index, file_path in enumerate(files, start=1):
+
+        print(
+            color(
+                f"[{index}] ",
+                Colors.BRIGHT_CYAN,
+            )
+            + file_path.name
+        )
+
+    print()
+
+    choice = input(
+        color(
+            "Select file number: ",
+            Colors.BRIGHT_CYAN,
+        )
+    ).strip()
+
+    if not choice.isdigit():
+
+        print(
+            color(
+                "\nERROR: Invalid selection.",
+                Colors.BRIGHT_RED,
+            )
+        )
+
+        pause()
+        return None
+
+    index = int(choice)
+
+    if index < 1 or index > len(files):
+
+        print(
+            color(
+                "\nERROR: Selection out of range.",
+                Colors.BRIGHT_RED,
+            )
+        )
+
+        pause()
+        return None
+
+    return files[index - 1]
 
 def run_command(arguments):
     """Run an existing StegoHide CLI command."""
@@ -394,6 +479,139 @@ def hide_menu():
         )
 
     pause()
+    
+def docx_hide_menu():
+    
+    header("HIDE TEXT IN DOCX")
+
+    input_docx = select_file(
+        INPUT_DIR,
+        "Available Input DOCX Files",
+        {".docx"},
+    )
+
+    if input_docx is None:
+        return
+
+    print()
+
+    print(
+        color(
+            "Output File Name",
+            Colors.BRIGHT_WHITE,
+        )
+    )
+
+    output_name = input(
+        color("> ", Colors.BRIGHT_CYAN)
+    ).strip()
+
+    if not output_name:
+
+        print(
+            color(
+                "\nERROR: Output file name cannot be empty.",
+                Colors.BRIGHT_RED,
+            )
+        )
+
+        pause()
+        return
+
+    output_path = OUTPUT_DIR / output_name
+
+    if output_path.suffix.lower() != ".docx":
+
+        print(
+            color(
+                "\nERROR: Output file must be DOCX.",
+                Colors.BRIGHT_RED,
+            )
+        )
+
+        pause()
+        return
+
+    if output_path.exists():
+
+        print()
+
+        print(
+            color(
+                f"WARNING: {output_path.name} already exists.",
+                Colors.BRIGHT_YELLOW,
+            )
+        )
+
+        confirmation = input(
+            color(
+                "Overwrite it? (y/n): ",
+                Colors.BRIGHT_CYAN,
+            )
+        ).strip().lower()
+
+        if confirmation != "y":
+
+            print(
+                color(
+                    "\nOperation cancelled.",
+                    Colors.YELLOW,
+                )
+            )
+
+            pause()
+            return
+
+    print()
+
+    print(
+        color(
+            "Message",
+            Colors.BRIGHT_WHITE,
+        )
+    )
+
+    message = input(
+        color("> ", Colors.BRIGHT_CYAN)
+    )
+
+    print()
+
+    line()
+
+    print(
+        "|"
+        + color(
+            "PROCESSING".center(WIDTH),
+            Colors.BRIGHT_YELLOW,
+        )
+        + "|"
+    )
+
+    line()
+
+    exit_code = run_command(
+        [
+            "docx-hide",
+            str(input_docx),
+            str(output_path),
+            "--message",
+            message,
+        ]
+    )
+
+    if exit_code == 0:
+
+        print()
+
+        print(
+            color(
+                "SUCCESS: Message hidden in DOCX successfully.",
+                Colors.BRIGHT_GREEN,
+            )
+        )
+
+    pause()
 
 
 # ============================================================
@@ -447,6 +665,53 @@ def extract_menu():
 
     pause()
 
+def docx_extract_menu():
+    
+    header("EXTRACT TEXT FROM DOCX")
+
+    input_docx = select_file(
+        OUTPUT_DIR,
+        "Available Stego DOCX Files",
+        {".docx"},
+    )
+
+    if input_docx is None:
+        return
+
+    print()
+
+    line()
+
+    print(
+        "|"
+        + color(
+            "PROCESSING".center(WIDTH),
+            Colors.BRIGHT_YELLOW,
+        )
+        + "|"
+    )
+
+    line()
+
+    exit_code = run_command(
+        [
+            "docx-extract",
+            str(input_docx),
+        ]
+    )
+
+    if exit_code == 0:
+
+        print()
+
+        print(
+            color(
+                "SUCCESS: Message extracted from DOCX successfully.",
+                Colors.BRIGHT_GREEN,
+            )
+        )
+
+    pause()
 
 # ============================================================
 # Image Capacity
@@ -498,6 +763,55 @@ def capacity_menu():
         )
 
     pause()
+
+
+def capacity_menu():
+
+    header("IMAGE CAPACITY")
+
+    image = select_image(
+        INPUT_DIR,
+        "Available Input Images",
+    )
+
+    if image is None:
+        return
+
+    print()
+
+    line()
+
+    print(
+        "|"
+        + color(
+            "CAPACITY INFORMATION".center(WIDTH),
+            Colors.BRIGHT_YELLOW,
+        )
+        + "|"
+    )
+
+    line()
+
+    exit_code = run_command(
+        [
+            "capacity",
+            str(image),
+        ]
+    )
+
+    if exit_code == 0:
+
+        print()
+
+        print(
+            color(
+                "Capacity check completed successfully.",
+                Colors.BRIGHT_GREEN,
+            )
+        )
+
+    pause()
+
 
 
 # ============================================================
@@ -847,9 +1161,8 @@ def delete_report_menu():
 # ============================================================
 # Help
 # ============================================================
-
 def help_menu():
-
+    
     header("HELP")
 
     help_items = [
@@ -862,16 +1175,31 @@ def help_menu():
         ("[3] Check Image Capacity",
          "Display image dimensions and available LSB capacity."),
 
-        ("[4] View Previous Report",
+        ("[4] Hide Text in DOCX",
+         "Hide a UTF-8 message inside a DOCX document."),
+
+        ("[5] Extract Text from DOCX",
+         "Extract a hidden message from a DOCX document."),
+
+        ("[6] Hide Text in Video",
+         "Hide a UTF-8 message inside an STV video."),
+
+        ("[7] Extract Text from Video",
+         "Extract a hidden message from an STV video."),
+
+        ("[8] Image Forensics",
+         "Analyze an image and check for a StegoHide signature."),
+
+        ("[9] View Previous Report",
          "Open a previously generated operation report."),
 
-        ("[5] List Reports",
+        ("[10] List Reports",
          "Display all generated reports."),
 
-        ("[6] Delete Report",
+        ("[11] Delete Report",
          "Delete a selected report."),
 
-        ("[7] Help",
+        ("[12] Help",
          "Display this help information."),
 
         ("[0] Exit",
@@ -899,7 +1227,6 @@ def help_menu():
         print()
 
     pause()
-
 
 # ============================================================
 # Main Menu
@@ -963,10 +1290,15 @@ def main_menu():
             "[1]  Hide Text",
             "[2]  Extract Text",
             "[3]  Check Image Capacity",
-            "[4]  View Previous Report",
-            "[5]  List Reports",
-            "[6]  Delete Report",
-            "[7]  Help",
+            "[4]  Hide Text in DOCX",
+            "[5]  Extract Text from DOCX",
+            "[6]  Hide Text in Video",
+            "[7]  Extract Text from Video",
+            "[8]  Image Forensics",
+            "[9]  View Previous Report",
+            "[10] List Reports",
+            "[11] Delete Report",
+            "[12] Help",
             "[0]  Exit",
         ]
 
@@ -1046,19 +1378,33 @@ def main_menu():
             capacity_menu()
 
         elif choice == "4":
-            view_report_menu()
+            docx_hide_menu()
 
         elif choice == "5":
-            reports_list_menu()
+            docx_extract_menu()
 
         elif choice == "6":
-            delete_report_menu()
+            video_hide_menu()
 
         elif choice == "7":
+            video_extract_menu()
+        elif choice == "8":
+            forensics_menu()
+
+        elif choice == "9":
+            view_report_menu()
+
+        elif choice == "10":
+            reports_list_menu()
+
+        elif choice == "11":
+            delete_report_menu()
+
+        elif choice == "12":
             help_menu()
 
         elif choice == "0":
-
+            
             print()
 
             line()
@@ -1100,9 +1446,237 @@ def main_menu():
 
             print(
                 color(
-                    "Please select a number from 0 to 7.",
+                    "Please select a number from 0 to 12.",
                     Colors.YELLOW,
                 )
             )
 
             pause()
+            
+def video_hide_menu():
+    
+    header("HIDE TEXT IN VIDEO")
+
+    input_video = select_file(
+        INPUT_DIR,
+        "Available Input STV Files",
+        {".stv"},
+    )
+
+    if input_video is None:
+        return
+
+    print()
+
+    print(
+        color(
+            "Output File Name",
+            Colors.BRIGHT_WHITE,
+        )
+    )
+
+    output_name = input(
+        color("> ", Colors.BRIGHT_CYAN)
+    ).strip()
+
+    if not output_name:
+
+        print(
+            color(
+                "\nERROR: Output file name cannot be empty.",
+                Colors.BRIGHT_RED,
+            )
+        )
+
+        pause()
+        return
+
+    output_path = OUTPUT_DIR / output_name
+
+    if output_path.suffix.lower() != ".stv":
+
+        print(
+            color(
+                "\nERROR: Output file must be STV.",
+                Colors.BRIGHT_RED,
+            )
+        )
+
+        pause()
+        return
+
+    if output_path.exists():
+
+        print()
+
+        print(
+            color(
+                f"WARNING: {output_path.name} already exists.",
+                Colors.BRIGHT_YELLOW,
+            )
+        )
+
+        confirmation = input(
+            color(
+                "Overwrite it? (y/n): ",
+                Colors.BRIGHT_CYAN,
+            )
+        ).strip().lower()
+
+        if confirmation != "y":
+
+            print(
+                color(
+                    "\nOperation cancelled.",
+                    Colors.YELLOW,
+                )
+            )
+
+            pause()
+            return
+
+    print()
+
+    print(
+        color(
+            "Message",
+            Colors.BRIGHT_WHITE,
+        )
+    )
+
+    message = input(
+        color("> ", Colors.BRIGHT_CYAN)
+    )
+
+    print()
+
+    line()
+
+    print(
+        "|"
+        + color(
+            "PROCESSING".center(WIDTH),
+            Colors.BRIGHT_YELLOW,
+        )
+        + "|"
+    )
+
+    line()
+
+    exit_code = run_command(
+        [
+            "video-hide",
+            str(input_video),
+            str(output_path),
+            "--message",
+            message,
+        ]
+    )
+
+    if exit_code == 0:
+
+        print()
+
+        print(
+            color(
+                "SUCCESS: Message hidden in video successfully.",
+                Colors.BRIGHT_GREEN,
+            )
+        )
+
+    pause()
+    
+def video_extract_menu():
+    
+    header("EXTRACT TEXT FROM VIDEO")
+
+    input_video = select_file(
+        OUTPUT_DIR,
+        "Available Stego STV Files",
+        {".stv"},
+    )
+
+    if input_video is None:
+        return
+
+    print()
+
+    line()
+
+    print(
+        "|"
+        + color(
+            "PROCESSING".center(WIDTH),
+            Colors.BRIGHT_YELLOW,
+        )
+        + "|"
+    )
+
+    line()
+
+    exit_code = run_command(
+        [
+            "video-extract",
+            str(input_video),
+        ]
+    )
+
+    if exit_code == 0:
+
+        print()
+
+        print(
+            color(
+                "SUCCESS: Message extracted from video successfully.",
+                Colors.BRIGHT_GREEN,
+            )
+        )
+
+    pause()
+    
+def forensics_menu():
+    
+    header("IMAGE FORENSICS")
+
+    image = select_image(
+        INPUT_DIR,
+        "Available Input Images",
+    )
+
+    if image is None:
+        return
+
+    print()
+
+    line()
+
+    print(
+        "|"
+        + color(
+            "FORENSIC ANALYSIS".center(WIDTH),
+            Colors.BRIGHT_YELLOW,
+        )
+        + "|"
+    )
+
+    line()
+
+    exit_code = run_command(
+        [
+            "forensics",
+            str(image),
+        ]
+    )
+
+    if exit_code == 0:
+
+        print()
+
+        print(
+            color(
+                "Forensic analysis completed successfully.",
+                Colors.BRIGHT_GREEN,
+            )
+        )
+
+    pause()

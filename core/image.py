@@ -1187,3 +1187,214 @@ def write_bmp_image(file_path, image_data):
 def get_rgb_pixels(image):
     """Return the flat RGB pixel data."""
     return image["pixels"]
+
+
+def sample_png_lsb(path, sample_count=100000):
+    """
+    Perform LSB analysis using evenly distributed rows and pixels.
+
+    The function does not create a Python list of all image pixels.
+    """
+
+    if sample_count <= 0:
+        raise ValueError("sample_count must be greater than zero.")
+
+    png = _parse_png(path)
+
+    width = png["width"]
+    height = png["height"]
+    color_type = png["color_type"]
+    raw = png["raw"]
+
+    channels = 4 if color_type == 6 else 3
+    stride = width * channels
+    row_size = 1 + stride
+
+    total_pixels = width * height
+
+    # Analyze at most 100 rows.
+    rows_to_sample = min(height, 100)
+
+    # Distribute samples across selected rows.
+    pixels_per_row = max(
+        1,
+        min(width, sample_count // rows_to_sample)
+    )
+
+    counts = {
+        "red": {"zero": 0, "one": 0},
+        "green": {"zero": 0, "one": 0},
+        "blue": {"zero": 0, "one": 0},
+    }
+
+    # Pre-calculate selected rows.
+    if rows_to_sample == 1:
+        selected_rows = {0}
+    else:
+        selected_rows = {
+            round(i * (height - 1) / (rows_to_sample - 1))
+            for i in range(rows_to_sample)
+        }
+
+    previous_row = bytearray(stride)
+    actual_samples = 0
+
+    for y in range(height):
+
+        raw_position = y * row_size
+
+        filter_type = raw[raw_position]
+
+        filtered_row = raw[
+            raw_position + 1:
+            raw_position + 1 + stride
+        ]
+
+        # ---------------------------------------------------------
+        # Reconstruct the row.
+        # ---------------------------------------------------------
+
+        row = bytearray(stride)
+
+        if filter_type == 0:
+
+            row[:] = filtered_row
+
+        elif filter_type == 1:
+
+            for i, value in enumerate(filtered_row):
+
+                left = (
+                    row[i - channels]
+                    if i >= channels
+                    else 0
+                )
+
+                row[i] = (value + left) & 0xFF
+
+        elif filter_type == 2:
+
+            for i, value in enumerate(filtered_row):
+
+                row[i] = (
+                    value + previous_row[i]
+                ) & 0xFF
+
+        elif filter_type == 3:
+
+            for i, value in enumerate(filtered_row):
+
+                left = (
+                    row[i - channels]
+                    if i >= channels
+                    else 0
+                )
+
+                above = previous_row[i]
+
+                row[i] = (
+                    value + ((left + above) // 2)
+                ) & 0xFF
+
+        elif filter_type == 4:
+
+            for i, value in enumerate(filtered_row):
+
+                left = (
+                    row[i - channels]
+                    if i >= channels
+                    else 0
+                )
+
+                above = previous_row[i]
+
+                upper_left = (
+                    previous_row[i - channels]
+                    if i >= channels
+                    else 0
+                )
+
+                row[i] = (
+                    value
+                    + _paeth_predictor(
+                        left,
+                        above,
+                        upper_left,
+                    )
+                ) & 0xFF
+
+        else:
+
+            raise UnsupportedImageFormatError(
+                f"Unsupported PNG filter type: {filter_type}."
+            )
+
+        # ---------------------------------------------------------
+        # Analyze only selected rows.
+        # ---------------------------------------------------------
+
+        if y in selected_rows:
+
+            if pixels_per_row >= width:
+
+                pixel_positions = range(width)
+
+            else:
+
+                step = width / pixels_per_row
+
+                pixel_positions = (
+                    int(i * step)
+                    for i in range(pixels_per_row)
+                )
+
+            for x in pixel_positions:
+
+                base = x * channels
+
+                red = row[base]
+                green = row[base + 1]
+                blue = row[base + 2]
+
+                if red & 1:
+                    counts["red"]["one"] += 1
+                else:
+                    counts["red"]["zero"] += 1
+
+                if green & 1:
+                    counts["green"]["one"] += 1
+                else:
+                    counts["green"]["zero"] += 1
+
+                if blue & 1:
+                    counts["blue"]["one"] += 1
+                else:
+                    counts["blue"]["zero"] += 1
+
+                actual_samples += 1
+
+        previous_row = row
+
+    # -------------------------------------------------------------
+    # Calculate percentages.
+    # -------------------------------------------------------------
+
+    if actual_samples == 0:
+        raise ValueError("No pixels were sampled.")
+
+    for channel in counts.values():
+
+        channel["zero_percentage"] = (
+            channel["zero"] / actual_samples * 100
+        )
+
+        channel["one_percentage"] = (
+            channel["one"] / actual_samples * 100
+        )
+
+    return {
+        "sample_count": actual_samples,
+        "total_pixels": total_pixels,
+        "rows_analyzed": rows_to_sample,
+        "channels": counts,
+    }
